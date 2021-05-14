@@ -74,6 +74,18 @@ def load_datasets():
     return df_taxi, df_bikes
 
 
+@st.cache
+def load_models():
+    """
+    returns: (bike model, taxi model, taxi price model)
+    """
+    # LOADING the models
+    rf_bikes = joblib.load("models/rf_bike_regressor2.pkl")
+    rf_taxi = joblib.load("models/rf_taxi_regressor_2.pkl")
+    rf_taxi_price = joblib.load("models/rf_taxi_price_regressor.pkl")
+    return rf_bikes, rf_taxi, rf_taxi_price
+
+
 @st.cache(hash_funcs={dict: lambda _: None})
 def create_choropleths(hour):
     fig_taxi = px.choropleth_mapbox(
@@ -274,14 +286,11 @@ df_taxi, df_bikes = load_datasets()
 with open("datasets/weather_dict.pkl", "rb") as f:
     weather_dict = pickle.load(f)
 
+## LOADING MODELS
+
 
 max_speed = df_taxi.avg_speed.max()
-
-# LOADING the models
-rf_bike = joblib.load("models/rf_bike_regressor2.pkl")
-rf_taxi = joblib.load("models/rf_taxi_regressor_2.pkl")
-rf_taxi_price = joblib.load("models/rf_taxi_price_regressor.pkl")
-
+rf_bike, rf_taxi, rf_taxi_price = load_models()
 
 st.title("Bike vs Taxis")
 
@@ -354,8 +363,11 @@ with left_column_3:
 
     # st.form_submit_button returns True upon form submit
 st.write("### Model Prediction")
+
 distance = PLACE_HOLDER_DISTANCE
+
 if submit_button:
+    month = month_to_index[month]
     taxi_features = np.array(
         [
             weather_dict[month]["WND"],
@@ -366,11 +378,11 @@ if submit_button:
             weather_dict[month]["SLP"],
             distance,
             hour,
-            weekday,
+            days_to_index[weekday],
             month,
             get_avg_speed(df_taxi, starting_zone, ending_zone, hour),
         ]
-    )
+    ).reshape(1, -1)
     bike_features = np.array(
         [
             weather_dict[month]["WND"],
@@ -381,22 +393,25 @@ if submit_button:
             weather_dict[month]["SLP"],
             distance,
             hour,
-            weekday,
+            days_to_index[weekday],
             month,
             get_avg_speed(df_bikes, starting_zone, ending_zone, hour),
         ]
-    )
+    ).reshape(1, -1)
+
     time_taxi_prediction = rf_taxi.predict(taxi_features)
-    price_taxi_prediction = rf_taxi.predict(time_taxi_prediction[0])
-    time_bike_prediction = rf_taxi.predict(bike_features)
+    price_taxi_prediction = rf_taxi_price.predict(
+        np.array([distance, time_taxi_prediction[0]]).reshape(1, -1)
+    )
+    time_bike_prediction = rf_bike.predict(bike_features)
 
     st.write(
-        f"  Hello {name}! \n Taking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction:.2f}$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
+        f"  Hello {name}! \n Taking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction[0]:.2f}\$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
     )
 
-starting_zone = 1
-ending_zone = 2
-hour = 4
+# print(
+#     f"  Hello {name}! \nTaking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction[0]:.2f}$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
+# )
 
 
 right_column.write(
@@ -406,5 +421,4 @@ right_column.write(
         What it returns? 
         """
 )
-
 st.write("## Route Network Analysis for Bikes")

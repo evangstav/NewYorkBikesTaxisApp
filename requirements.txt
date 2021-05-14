@@ -149,7 +149,7 @@ sklearn-pandas==2.1.0
 smmap==4.0.0
 sniffio==1.2.0
 statsmodels==0.12.2
-streamlit==0.81.1
+streamlit==0.82.0
 sweetviz==2.1.0
 tabulate==0.8.9
 terminado==0.9.2
