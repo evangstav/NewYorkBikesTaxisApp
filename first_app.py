@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
+from PIL import Image
 
 st.set_page_config(
     page_title="BikesVsTaxisNYC",
@@ -36,6 +37,11 @@ output_text = ""
 # NYC location
 LAT = 40.760610
 LON = -73.95242
+
+
+@st.cache
+def load_images():
+    return Image.open("datasets/pic_1.png"), Image.open("datasets/pic_2.png")
 
 
 def get_avg_distance(df, starting_zone, ending_zone, hour):
@@ -78,7 +84,7 @@ def load_data(path):
     return pd.read_csv(path)
 
 
-@st.cache()
+@st.cache(suppress_st_warning=True)
 def load_datasets():
     df_taxi = load_data("datasets/taxi_zone_speed_DISTANCE_by_hour.csv").drop(
         columns=["Unnamed: 0"]
@@ -89,7 +95,7 @@ def load_datasets():
     return df_taxi, df_bikes
 
 
-@st.cache()
+@st.cache(suppress_st_warning=True)
 def load_datasets_choro():
     df_taxi = load_data("datasets/final_taxi.csv").drop(columns=["Unnamed: 0"])
     df_bikes = load_data("datasets/final_bike.csv").drop(columns=["Unnamed: 0"])
@@ -296,36 +302,9 @@ def get_monthly_counts_line():
         color="type",
         width=1000,
         height=400,
-        title="Monthly Rides for different types of rides",
     )
     fig.update_layout(margin={"r": 1, "t": 0, "l": 1, "b": 0})
     return fig
-
-
-# @st.cache(hash_funcs={dict: lambda _: None})
-# def get_HOW_counts_line():
-#     data_taxi = pd.DataFrame(
-#         zip(list(range(168)), taxi_counts["HOW_count"]),
-#         columns=["Hour of the Week", "count"],
-#         index=None,
-#     )
-#     data_taxi['type'] = 'taxi'
-#     data_customer = pd.DataFrame(
-#         zip(list(range(168)), customer_counts["HOW_count"]),
-#         columns=["Hour of the Week", "count"],
-#         index=None,
-#     )
-#     data_customer['type'] = 'customer'
-#     data_subscriber = pd.DataFrame(
-#         zip(list(range(168)), subscriber_counts["HOW_count"]),
-#         columns=["Hour of the Week", "count"],
-#         index=None,
-#     )
-#     data_subscriber['type'] = 'subscriber'
-#     data = pd.concat([data_taxi, data_subscriber, data_customer])
-#     fig = px.line(data, x="Hour of the Week", y="count", color='type')
-#     fig.update_layout(margin={"r": 1, "t": 0, "l": 1, "b": 0})
-#     return fig
 
 
 @st.cache(hash_funcs={dict: lambda _: None})
@@ -375,18 +354,24 @@ df_taxi_choro, df_bikes_choro = load_datasets_choro()
 with open("datasets/weather_dict.pkl", "rb") as f:
     weather_dict = pickle.load(f)
 
+image_1, image_2 = load_images()
+
 ## LOADING MODELS
 rf_bike, rf_taxi, rf_taxi_price = load_models()
 
 
 ## STARTING PAGE
-st.title("Bike vs Taxis")
-
-st.write("## Intro")
-
-st.write("## Descriptive statistics")
+st.title("Bike vs Taxis in New York City")
+st.write("# Introduction")
+st.markdown(
+    "This website aims to shed light on the benefits of commuting by bike in New York City relative to taking a cab. To do this the CitiBike data and Green Taxi Trip data will be used in a graphical and interactive manner. The full analysis and code are contained in this [jupyter notebook](https://colab.research.google.com/drive/1kTbYnSqxV0nabAc1PIaRHHLzNUPhEoGN?usp=sharing)"
+)
+st.write("# Descriptive statistics")
+st.write(
+    "Lets begin with some basic counts over time for different time periods. You can use the dropdown list to change the timeframe."
+)
 add_selectbox = st.selectbox(
-    "Choose Timeframe", ("Hours", "Month", "Day of the Week", "Hour of the Week")
+    "Choose Timeframe", ("Hourly", "Monthly", "Day of the Week", "Hour of the Week")
 )
 left_column_1, middle_column_1, right_column_1 = st.beta_columns((1, 1, 1))
 # You can use a column just like st.sidebar1
@@ -401,8 +386,8 @@ taxi_HOW, customer_HOW, subscriber_HOW = get_HOW_counts_figures()
 taxi_DOW, customer_DOW, subscriber_DOW = get_DOW_counts_figures()
 
 left_column_1.write("           Taxi Rides")
-middle_column_1.write("         Subscriber Rides")
-right_column_1.write("          Customer Rides")
+middle_column_1.write("          Customer Rides")
+right_column_1.write("         Subscriber Rides")
 
 if add_selectbox == "Month":
     left_column_1.plotly_chart(taxi_month, width=300)
@@ -420,14 +405,24 @@ else:
     left_column_1.plotly_chart(taxi_HOW, width=300)
     middle_column_1.plotly_chart(customer_HOW, width=300)
     right_column_1.plotly_chart(subscriber_HOW, width=300)
+st.write(
+    'The different plots reveal that a lot of people actually choose to commute by bike back and fourth from their 9-5 jobs while " Customers " are most likely tourist that cruise the city in weekends and in a more bell-curved manner through out the day.'
+)
+left_column_2, right_column_2 = st.beta_columns((1, 1))
+right_column_2.plotly_chart(line_figure)
+left_column_2.write("Lets take a close look at the usage over a year.")
+left_column_2.write(
+    "When you look at the different types of transportation \nover the months the plot shows that biking is more preferable \nin the warmer months and actually affects the demand for taxis."
+)
 
-left_column_2, right_column_2 = st.beta_columns((2, 1))
-left_column_2.plotly_chart(line_figure)
-right_column_2.write("Describe the plots here")
 
-
-st.write("## Average Travel Speed")
-st.write("Random text")
+st.write("# Average Travel Speed")
+st.write(
+    "New York City is a complicated and a big city, the taxi company make use of certain zones to represent the different areas. We took an advantage of this and visualized the average speed traveld within each zone at a given hour."
+)
+st.write(
+    "By looking at the average speed per zone for each hour it is easier to understand how traffic affects the two different transportation options. The slider below changes the plots on the 24 hour scale. Playing arround with this reveals some interesting features, can you see them? The decrease of average speed during rush hour is much greater for the taxis that for bikes. This indicates that bikeing is a more stable and reliable mode of transportation, even when your are in a hurry!"
+)
 hour = st.slider("Hour of the Day", 0, 23, 17)  # 👈 this is a widget
 fig_taxi, fig_bikes = create_choropleths(hour)
 left_column, right_column = st.beta_columns(2)
@@ -439,12 +434,17 @@ right_column.plotly_chart(fig_bikes)
     left,
     right,
 ) = st.beta_columns((2, 6))
+st.empty()
 right.plotly_chart(avg_hourly_relative_speed())
-left.write("## Maybe write something here")
-left.write("Maybe write something here")
+left.write(
+    "## This can be confirmed with this plot over average speed per hour for the whole dataset."
+)
+left.write(
+    "However it is interesting to see that biking travel speed \nare actually correlated with the taxis indicating that\n the bikers are dependant on the infrastructure of the taxis!"
+)
 
 
-st.write("## Predictive Modeling")
+st.write("# Predictive Modeling")
 # Our models take as input ['WND','CIG','VIS','TMP','DEW','SLP','distance_meters','Hour','Weekday','Month','avg_speed']
 start_stations = df_taxi.start_station.unique()
 end_stations = df_taxi.end_station.unique()
@@ -501,20 +501,19 @@ if submit_button:
         np.array([taxi_distance, time_taxi_prediction[0]]).reshape(1, -1)
     )
     time_bike_prediction = rf_bike.predict(bike_features)
-    output_text = f"Hello {name}! \n Taking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction[0]:.2f}\$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
+    output_text = f"## Hello {name}! \n## Taking a taxi you would need **{time_taxi_prediction[0]/60:.1f}** minutes to reach zone {ending_zone} costing you around _{price_taxi_prediction[0]:.2f}\$_. \n## Taking the bike costs _3.5$/h_ and it will take you **{time_bike_prediction[0]/60:.1f}** minutes!"
 
 right_column_3.write(
-    """
-            ## What is our model?
-            What is it doing?\n
-            What it returns? 
-            """
+    "## But if you get caught in a situation where you need to get from a-b, do you know how long it will take you with the taxi compared to a bike? What about the cost? "
+)
+right_column_3.write(
+    "This can be a problem that is hard to estimate on your own. That is why we have developed a machine learning model that can estimate those factors for you. Now you can take a well informed decisons every time and you will be surprised to find out that often times taking the bike is also quicker."
 )
 
-right_column_3.write("### Model Prediction")
+# right_column_3.write("## Model Prediction")
 right_column_3.write(output_text)
 
-st.write("## Route Network Analysis for Bikes")
+st.write("# Route Network Analysis for Bikes")
 
 left_column_4, right_column_4 = st.beta_columns((2, 1))
 with left_column_4:
@@ -522,5 +521,18 @@ with left_column_4:
     source_code = HtmlFile.read()
     components.html(source_code, height=800, width=800)
 with right_column_4:
-    st.write("### Insights regarding road network")
-    st.write("Describe insights regarding road network and make recommendations")
+    st.write(
+        "Infrastructure for bike is essential to promote more people to use bikes. The graph on the left shows roads expected to be most used by bikers in New York City. The darker the blue the heavier the traffic."
+    )
+
+
+st.write(
+    "The most trafficted paths are actually those with the best infrastructure in town. The road on the west coast has great designated bike lanes while commuters on 23rd street make use of the bus lane to easily navigate throught the city - a place where improvement of the biking infrastructure could help."
+)
+left_column_last, right_column_last = st.beta_columns(2)
+left_column_last.image(
+    image_1, caption="Bike lane by the sea, NYC", use_column_width="always"
+)
+right_column_last.image(
+    image_2, caption="Bus lane used by biker, NYC", use_column_width="always"
+)
