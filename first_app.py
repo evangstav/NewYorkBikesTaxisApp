@@ -6,13 +6,12 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="BikesVsTaxisNYC",
     layout="wide",
 )
-
-PLACE_HOLDER_DISTANCE = 3000
 
 MONTHS = [
     "January",
@@ -28,18 +27,18 @@ MONTHS = [
     "November",
     "December",
 ]
-
 month_to_index = dict([(m, i) for i, m in enumerate(MONTHS)])
 
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursay", "Friday", "Saturday", "Sunday"]
 days_to_index = dict([(d, i) for i, d in enumerate(DAYS)])
 
+output_text = ""
 # NYC location
 LAT = 40.760610
 LON = -73.95242
 
 
-def get_distance(df, starting_zone, ending_zone, hour):
+def get_avg_distance(df, starting_zone, ending_zone, hour):
     avg_distance = df["distance"][
         (df["start_station"] == starting_zone)
         & (df["end_station"] == ending_zone)
@@ -90,7 +89,14 @@ def load_datasets():
     return df_taxi, df_bikes
 
 
-@st.cache
+@st.cache()
+def load_datasets_choro():
+    df_taxi = load_data("datasets/final_taxi.csv").drop(columns=["Unnamed: 0"])
+    df_bikes = load_data("datasets/final_bike.csv").drop(columns=["Unnamed: 0"])
+    return df_taxi, df_bikes
+
+
+@st.cache(suppress_st_warning=True)
 def load_models():
     """
     returns: (bike model, taxi model, taxi price model)
@@ -105,12 +111,12 @@ def load_models():
 @st.cache(hash_funcs={dict: lambda _: None})
 def create_choropleths(hour):
     fig_taxi = px.choropleth_mapbox(
-        df_taxi[df_taxi.Hour == hour],
+        df_taxi_choro[df_taxi_choro.Hour == hour],
         geojson=zone_data,
         locations="end_station",
-        color="avg_speed",
-        color_continuous_scale="Viridis",
-        range_color=(0, df_taxi.avg_speed.max()),
+        color="relative_avg_zone_speed",
+        color_continuous_scale="rainbow",
+        range_color=(0, df_taxi_choro.relative_avg_zone_speed.max()),
         mapbox_style="carto-positron",
         zoom=10,
         center={"lat": LAT, "lon": LON},
@@ -120,12 +126,12 @@ def create_choropleths(hour):
     fig_taxi.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
 
     fig_bikes = px.choropleth_mapbox(
-        df_bikes[df_bikes.Hour == hour],
+        df_bikes_choro[df_bikes_choro.Hour == hour],
         geojson=zone_data,
-        locations="start_station",
-        color="avg_speed",
-        color_continuous_scale="Viridis",
-        range_color=(0, df_bikes.avg_speed.max()),
+        locations="end_station",
+        color="relative_avg_zone_speed",
+        color_continuous_scale="rainbow",
+        range_color=(0, df_bikes_choro.relative_avg_zone_speed.max()),
         mapbox_style="carto-positron",
         zoom=10,
         center={"lat": LAT, "lon": LON},
@@ -135,6 +141,14 @@ def create_choropleths(hour):
     fig_bikes.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
 
     return fig_taxi, fig_bikes
+
+
+@st.cache(hash_funcs={dict: lambda _: None})
+def avg_hourly_relative_speed():
+    relative_speed_df = pd.read_csv("datasets/relative_speed_per_hour.csv")
+    fig = px.line(relative_speed_df, x="Hour", y="relative_speed", color="type")
+    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+    return fig
 
 
 # Run counts for subscriber
@@ -255,6 +269,66 @@ def get_monthly_counts_figures():
 
 
 @st.cache(hash_funcs={dict: lambda _: None})
+def get_monthly_counts_line():
+    data_taxi = pd.DataFrame(
+        zip(MONTHS, taxi_counts["month_count"]),
+        columns=["months", "count"],
+        index=None,
+    )
+    data_taxi["type"] = "taxi"
+    data_customer = pd.DataFrame(
+        zip(MONTHS, customer_counts["month_count"]),
+        columns=["months", "count"],
+        index=None,
+    )
+    data_customer["type"] = "customer"
+    data_subscriber = pd.DataFrame(
+        zip(MONTHS, subscriber_counts["month_count"]),
+        columns=["months", "count"],
+        index=None,
+    )
+    data_subscriber["type"] = "subscriber"
+    data = pd.concat([data_taxi, data_subscriber, data_customer])
+    fig = px.line(
+        data,
+        x="months",
+        y="count",
+        color="type",
+        width=1000,
+        height=400,
+        title="Monthly Rides for different types of rides",
+    )
+    fig.update_layout(margin={"r": 1, "t": 0, "l": 1, "b": 0})
+    return fig
+
+
+# @st.cache(hash_funcs={dict: lambda _: None})
+# def get_HOW_counts_line():
+#     data_taxi = pd.DataFrame(
+#         zip(list(range(168)), taxi_counts["HOW_count"]),
+#         columns=["Hour of the Week", "count"],
+#         index=None,
+#     )
+#     data_taxi['type'] = 'taxi'
+#     data_customer = pd.DataFrame(
+#         zip(list(range(168)), customer_counts["HOW_count"]),
+#         columns=["Hour of the Week", "count"],
+#         index=None,
+#     )
+#     data_customer['type'] = 'customer'
+#     data_subscriber = pd.DataFrame(
+#         zip(list(range(168)), subscriber_counts["HOW_count"]),
+#         columns=["Hour of the Week", "count"],
+#         index=None,
+#     )
+#     data_subscriber['type'] = 'subscriber'
+#     data = pd.concat([data_taxi, data_subscriber, data_customer])
+#     fig = px.line(data, x="Hour of the Week", y="count", color='type')
+#     fig.update_layout(margin={"r": 1, "t": 0, "l": 1, "b": 0})
+#     return fig
+
+
+@st.cache(hash_funcs={dict: lambda _: None})
 def get_HOW_counts_figures():
     data_taxi = pd.DataFrame(
         zip(list(range(168)), taxi_counts["HOW_count"]),
@@ -272,19 +346,19 @@ def get_HOW_counts_figures():
         index=None,
     )
     fig_taxi = px.bar(data_taxi, x="Hour of Week", y="count")
-    fig_taxi.update_layout(margin={"r": 1, "t": 0, "l": 1, "b": 0})
+    fig_taxi.update_layout(margin={"r": 2, "t": 0, "l": 1, "b": 0})
     fig_customers = px.bar(
         data_customer,
         x="Hour of Week",
         y="count",
     )
-    fig_customers.update_layout(margin={"r": 1, "t": 0, "l": 1, "b": 0})
+    fig_customers.update_layout(margin={"r": 2, "t": 0, "l": 1, "b": 0})
     fig_subscribers = px.bar(
         data_subscriber,
         x="Hour of Week",
         y="count",
     )
-    fig_subscribers.update_layout(margin={"r": 1, "t": 0, "l": 1, "b": 0})
+    fig_subscribers.update_layout(margin={"r": 2, "t": 0, "l": 1, "b": 0})
 
     return fig_taxi, fig_customers, fig_subscribers
 
@@ -294,34 +368,21 @@ with open("datasets/NYC_Taxi_Zones.geojson") as json_file:
     zone_data = json.load(json_file)
 for d in zone_data["features"]:
     d["id"] = d["properties"]["location_id"]
-
 customer_counts, subscriber_counts, taxi_counts = load_counts()
-
 df_taxi, df_bikes = load_datasets()
+df_taxi_choro, df_bikes_choro = load_datasets_choro()
 
 with open("datasets/weather_dict.pkl", "rb") as f:
     weather_dict = pickle.load(f)
 
 ## LOADING MODELS
-
-
-max_speed = df_taxi.avg_speed.max()
 rf_bike, rf_taxi, rf_taxi_price = load_models()
 
+
+## STARTING PAGE
 st.title("Bike vs Taxis")
 
 st.write("## Intro")
-
-
-hour = st.slider("Hour of the Day", 0, 23, 17)  # 👈 this is a widget
-fig_taxi, fig_bikes = create_choropleths(hour)
-st.write("## Average Travel Speed")
-st.write("Random text")
-left_column, right_column = st.beta_columns(2)
-left_column.write("## Taxi")
-left_column.plotly_chart(fig_taxi)
-right_column.write("## Bikes")
-right_column.plotly_chart(fig_bikes)
 
 st.write("## Descriptive statistics")
 add_selectbox = st.selectbox(
@@ -335,29 +396,52 @@ left_column_1, middle_column_1, right_column_1 = st.beta_columns((1, 1, 1))
     subscriber_hourly_counts,
 ) = get_hourly_counts_figures()
 taxi_month, customer_month, subscriber_month = get_monthly_counts_figures()
+line_figure = get_monthly_counts_line()
 taxi_HOW, customer_HOW, subscriber_HOW = get_HOW_counts_figures()
 taxi_DOW, customer_DOW, subscriber_DOW = get_DOW_counts_figures()
 
-left_column_1.write("Taxi Rides")
-middle_column_1.write("Subscriber Rides")
-right_column_1.write("Customer Rides")
+left_column_1.write("           Taxi Rides")
+middle_column_1.write("         Subscriber Rides")
+right_column_1.write("          Customer Rides")
 
 if add_selectbox == "Month":
-    left_column_1.plotly_chart(taxi_month)
-    middle_column_1.plotly_chart(customer_month)
-    right_column_1.plotly_chart(subscriber_month)
+    left_column_1.plotly_chart(taxi_month, width=300)
+    middle_column_1.plotly_chart(customer_month, width=300)
+    right_column_1.plotly_chart(subscriber_month, width=300)
 elif add_selectbox == "Hours":
-    left_column_1.plotly_chart(taxi_hourly_counts)
-    middle_column_1.plotly_chart(customer_hourly_counts)
-    right_column_1.plotly_chart(subscriber_hourly_counts)
+    left_column_1.plotly_chart(taxi_hourly_counts, width=300)
+    middle_column_1.plotly_chart(customer_hourly_counts, width=300)
+    right_column_1.plotly_chart(subscriber_hourly_counts, width=300)
 elif add_selectbox == "Day of the Week":
-    left_column_1.plotly_chart(taxi_DOW)
-    middle_column_1.plotly_chart(customer_DOW)
-    right_column_1.plotly_chart(subscriber_DOW)
+    left_column_1.plotly_chart(taxi_DOW, width=300)
+    middle_column_1.plotly_chart(customer_DOW, width=300)
+    right_column_1.plotly_chart(subscriber_DOW, width=300)
 else:
-    left_column_1.plotly_chart(taxi_HOW)
-    middle_column_1.plotly_chart(customer_HOW)
-    right_column_1.plotly_chart(subscriber_HOW)
+    left_column_1.plotly_chart(taxi_HOW, width=300)
+    middle_column_1.plotly_chart(customer_HOW, width=300)
+    right_column_1.plotly_chart(subscriber_HOW, width=300)
+
+left_column_2, right_column_2 = st.beta_columns((2, 1))
+left_column_2.plotly_chart(line_figure)
+right_column_2.write("Describe the plots here")
+
+
+st.write("## Average Travel Speed")
+st.write("Random text")
+hour = st.slider("Hour of the Day", 0, 23, 17)  # 👈 this is a widget
+fig_taxi, fig_bikes = create_choropleths(hour)
+left_column, right_column = st.beta_columns(2)
+left_column.write("## Taxi")
+left_column.plotly_chart(fig_taxi)
+right_column.write("## Bikes")
+right_column.plotly_chart(fig_bikes)
+(
+    left,
+    right,
+) = st.beta_columns((2, 6))
+right.plotly_chart(avg_hourly_relative_speed())
+left.write("## Maybe write something here")
+left.write("Maybe write something here")
 
 
 st.write("## Predictive Modeling")
@@ -365,23 +449,22 @@ st.write("## Predictive Modeling")
 start_stations = df_taxi.start_station.unique()
 end_stations = df_taxi.end_station.unique()
 # Forms can be declared using the 'with' syntax
-left_column_3, right_column = st.beta_columns((2, 3))
+left_column_3, right_column_3 = st.beta_columns((2, 3))
 with left_column_3:
     with st.form(key="my_form"):
         name = st.text_input(label="Enter your name")
         month = st.selectbox("Enter Month", MONTHS)
         hour = st.selectbox("Enter hour", list(range(0, 24)))
         weekday = st.selectbox("Enter day of the week", DAYS)
-        starting_zone = st.selectbox("Enter your starting zone", start_stations)
-        ending_zone = st.selectbox("Enter your end zone", end_stations)
+        starting_zone = st.selectbox("Enter your starting zone", sorted(start_stations))
+        ending_zone = st.selectbox("Enter your end zone", sorted(end_stations))
         submit_button = st.form_submit_button(label="Submit")
 
     # st.form_submit_button returns True upon form submit
 
-distance = PLACE_HOLDER_DISTANCE
-
 if submit_button:
     month = month_to_index[month]
+    taxi_distance = get_avg_distance(df_taxi, starting_zone, ending_zone, hour)
     taxi_features = np.array(
         [
             weather_dict[month]["WND"],
@@ -390,7 +473,7 @@ if submit_button:
             weather_dict[month]["TMP"],
             weather_dict[month]["DEW"],
             weather_dict[month]["SLP"],
-            distance,
+            get_avg_distance(df_taxi, starting_zone, ending_zone, hour),
             hour,
             days_to_index[weekday],
             month,
@@ -405,7 +488,7 @@ if submit_button:
             weather_dict[month]["TMP"],
             weather_dict[month]["DEW"],
             weather_dict[month]["SLP"],
-            distance,
+            get_avg_distance(df_bikes, starting_zone, ending_zone, hour),
             hour,
             days_to_index[weekday],
             month,
@@ -415,12 +498,12 @@ if submit_button:
 
     time_taxi_prediction = rf_taxi.predict(taxi_features)
     price_taxi_prediction = rf_taxi_price.predict(
-        np.array([distance, time_taxi_prediction[0]]).reshape(1, -1)
+        np.array([taxi_distance, time_taxi_prediction[0]]).reshape(1, -1)
     )
     time_bike_prediction = rf_bike.predict(bike_features)
     output_text = f"Hello {name}! \n Taking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction[0]:.2f}\$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
 
-right_column.write(
+right_column_3.write(
     """
             ## What is our model?
             What is it doing?\n
@@ -428,7 +511,16 @@ right_column.write(
             """
 )
 
-right_column.write("### Model Prediction")
-right_column.write(output_text)
+right_column_3.write("### Model Prediction")
+right_column_3.write(output_text)
 
 st.write("## Route Network Analysis for Bikes")
+
+left_column_4, right_column_4 = st.beta_columns((2, 1))
+with left_column_4:
+    HtmlFile = open("datasets/route_plot.html", "r", encoding="utf-8")
+    source_code = HtmlFile.read()
+    components.html(source_code, height=800, width=800)
+with right_column_4:
+    st.write("### Insights regarding road network")
+    st.write("Describe insights regarding road network and make recommendations")
