@@ -108,8 +108,8 @@ def load_models():
     returns: (bike model, taxi model, taxi price model)
     """
     # LOADING the models
-    rf_bikes = joblib.load("models/rf_bike_regressor2.pkl")
-    rf_taxi = joblib.load("models/rf_taxi_regressor_2.pkl")
+    rf_bikes = joblib.load("models/rf_bike_regressor3.pkl")
+    rf_taxi = joblib.load("models/rf_taxi_regressor_3.pkl")
     rf_taxi_price = joblib.load("models/rf_taxi_price_regressor.pkl")
     return rf_bikes, rf_taxi, rf_taxi_price
 
