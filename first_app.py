@@ -1,13 +1,19 @@
 import json
 import pickle
 
+import joblib
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import pydeck as pdk
 import streamlit as st
 
-months = [
+st.set_page_config(
+    page_title="BikesVsTaxisNYC",
+    layout="wide",
+)
+
+MONTHS = [
     "January",
     "February",
     "March",
@@ -22,21 +28,11 @@ months = [
     "December",
 ]
 
-days = ["Monday", "Tuesday", "Wednesday", "Thursay", "Friday", "Saturday", "Sunday"]
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursay", "Friday", "Saturday", "Sunday"]
 
-st.set_page_config(
-    page_title="BikesVsTaxisNYC",
-    layout="wide",
-)
 
-st.title("Bike vs Taxis")
-
-st.write("## Intro")
-
-with open("datasets/NYC_Taxi_Zones.geojson") as json_file:
-    zone_data = json.load(json_file)
-for d in zone_data["features"]:
-    d["id"] = d["properties"]["location_id"]
+LAT = 40.760610
+LON = -73.95242
 
 
 def load_data(path):
@@ -65,7 +61,7 @@ def create_choropleths(hour):
         range_color=(0, df_taxi.avg_speed.max()),
         mapbox_style="carto-positron",
         zoom=10,
-        center={"lat": lat, "lon": lon},
+        center={"lat": LAT, "lon": LON},
         opacity=0.5,
         labels={"Number": "random number"},
     )
@@ -80,7 +76,7 @@ def create_choropleths(hour):
         range_color=(0, df_bikes.avg_speed.max()),
         mapbox_style="carto-positron",
         zoom=10,
-        center={"lat": lat, "lon": lon},
+        center={"lat": LAT, "lon": LON},
         opacity=0.5,
         labels={"Number": "random number"},
     )
@@ -139,17 +135,17 @@ def get_hourly_counts_figures():
 @st.cache(hash_funcs={dict: lambda _: None})
 def get_DOW_counts_figures():
     data_taxi = pd.DataFrame(
-        zip(days, taxi_counts["DOW_count"]),
+        zip(DAYS, taxi_counts["DOW_count"]),
         columns=["Day of the Week", "count"],
         index=None,
     )
     data_customer = pd.DataFrame(
-        zip(days, customer_counts["DOW_count"]),
+        zip(DAYS, customer_counts["DOW_count"]),
         columns=["Day of the Week", "count"],
         index=None,
     )
     data_subscriber = pd.DataFrame(
-        zip(days, subscriber_counts["DOW_count"]),
+        zip(DAYS, subscriber_counts["DOW_count"]),
         columns=["Day of the Week", "count"],
         index=None,
     )
@@ -174,17 +170,17 @@ def get_DOW_counts_figures():
 @st.cache(hash_funcs={dict: lambda _: None})
 def get_monthly_counts_figures():
     data_taxi = pd.DataFrame(
-        zip(months, taxi_counts["month_count"]),
+        zip(MONTHS, taxi_counts["month_count"]),
         columns=["months", "count"],
         index=None,
     )
     data_customer = pd.DataFrame(
-        zip(months, customer_counts["month_count"]),
+        zip(MONTHS, customer_counts["month_count"]),
         columns=["months", "count"],
         index=None,
     )
     data_subscriber = pd.DataFrame(
-        zip(months, subscriber_counts["month_count"]),
+        zip(MONTHS, subscriber_counts["month_count"]),
         columns=["months", "count"],
         index=None,
     )
@@ -241,20 +237,31 @@ def get_HOW_counts_figures():
     return fig_taxi, fig_customers, fig_subscribers
 
 
+# LOADING THE DATA
+with open("datasets/NYC_Taxi_Zones.geojson") as json_file:
+    zone_data = json.load(json_file)
+for d in zone_data["features"]:
+    d["id"] = d["properties"]["location_id"]
+
 customer_counts, subscriber_counts, taxi_counts = load_counts()
 
 df_taxi, df_bikes = load_datasets()
 
 max_speed = df_taxi.avg_speed.max()
 
+# LOADING the models
+rf_bike = joblib.load("models/rf_bike_regressor2.pkl")
+rf_taxi = joblib.load("models/rf_taxi_regressor_2.pkl")
+rf_taxi_price = joblib.load("models/rf_taxi_price_regressor.pkl")
+
+
+st.title("Bike vs Taxis")
+
+st.write("## Intro")
+
+
 hour = st.slider("Hour of the Day", 0, 23, 17)  # 👈 this is a widget
-lat = 40.760610
-lon = -73.95242
-
-
 fig_taxi, fig_bikes = create_choropleths(hour)
-
-
 st.write("## Average Travel Speed")
 st.write("Random text")
 left_column, right_column = st.beta_columns(2)
@@ -306,9 +313,9 @@ left_column_3, right_column = st.beta_columns((2, 3))
 with left_column_3:
     with st.form(key="my_form"):
         name = st.text_input(label="Enter your name")
-        date = st.selectbox("Enter Month", months)
+        date = st.selectbox("Enter Month", MONTHS)
         hour = st.selectbox("Enter hour", list(range(0, 24)))
-        day_of_the_week = st.selectbox("Enter day of the week", days)
+        day_of_the_week = st.selectbox("Enter day of the week", DAYS)
         starting_location = st.text_input(
             label="Enter your current location (long/lat)"
         )
