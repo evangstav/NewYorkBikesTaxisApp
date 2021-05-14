@@ -13,6 +13,8 @@ st.set_page_config(
     layout="wide",
 )
 
+PLACE_HOLDER_DISTANCE = 3000
+
 MONTHS = [
     "January",
     "February",
@@ -28,11 +30,33 @@ MONTHS = [
     "December",
 ]
 
+month_to_index = dict([(m, i) for i, m in enumerate(MONTHS)])
+
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursay", "Friday", "Saturday", "Sunday"]
+days_to_index = dict([(d, i) for i, d in enumerate(DAYS)])
 
-
+# NYC location
 LAT = 40.760610
 LON = -73.95242
+
+
+def get_avg_speed(df, starting_zone, ending_zone, hour):
+    avg_speed = df["avg_speed"][
+        (df["start_station"] == starting_zone)
+        & (df["end_station"] == ending_zone)
+        & (df["Hour"] == hour)
+    ]
+    if len(avg_speed) == 0:
+        avg_speed = df["avg_speed"][
+            (df["end_station"] == ending_zone) & (df["Hour"] == hour)
+        ]
+    if len(avg_speed) == 0:
+        avg_speed = df["avg_speed"][(df["Hour"] == hour)]
+    if len(avg_speed) == 0:
+        avg_speed = df_taxi["avg_speed"]
+    avg_speed = np.mean(avg_speed)
+
+    return avg_speed
 
 
 def load_data(path):
@@ -41,7 +65,7 @@ def load_data(path):
 
 @st.cache()
 def load_datasets():
-    df_taxi = load_data("datasets/taxi_ENDzone_speed_by_hour.csv").drop(
+    df_taxi = load_data("datasets/taxi_zone_speed_by_hour.csv").drop(
         columns=["Unnamed: 0"]
     )
     df_bikes = load_data("datasets/bike_zone_speed_by_hour.csv").drop(
@@ -247,6 +271,10 @@ customer_counts, subscriber_counts, taxi_counts = load_counts()
 
 df_taxi, df_bikes = load_datasets()
 
+with open("datasets/weather_dict.pkl", "rb") as f:
+    weather_dict = pickle.load(f)
+
+
 max_speed = df_taxi.avg_speed.max()
 
 # LOADING the models
@@ -308,23 +336,68 @@ else:
 
 
 st.write("## Predictive Modeling")
+# Our models take as input ['WND','CIG','VIS','TMP','DEW','SLP','distance_meters','Hour','Weekday','Month','avg_speed']
+start_stations = df_taxi.start_station.unique()
+end_stations = df_taxi.end_station.unique()
 # Forms can be declared using the 'with' syntax
 left_column_3, right_column = st.beta_columns((2, 3))
 with left_column_3:
     with st.form(key="my_form"):
         name = st.text_input(label="Enter your name")
-        date = st.selectbox("Enter Month", MONTHS)
+        method = st.selectbox("Are you using Bike or Taxi", ["taxi", "bike"])
+        month = st.selectbox("Enter Month", MONTHS)
         hour = st.selectbox("Enter hour", list(range(0, 24)))
-        day_of_the_week = st.selectbox("Enter day of the week", DAYS)
-        starting_location = st.text_input(
-            label="Enter your current location (long/lat)"
-        )
-        target_location = st.text_input(label="Enter where you are (long/lat)")
+        weekday = st.selectbox("Enter day of the week", DAYS)
+        starting_zone = st.selectbox("Enter your starting zone", start_stations)
+        ending_zone = st.selectbox("Enter your end zone", end_stations)
         submit_button = st.form_submit_button(label="Submit")
+
     # st.form_submit_button returns True upon form submit
 st.write("### Model Prediction")
+distance = PLACE_HOLDER_DISTANCE
 if submit_button:
-    st.write(f"  Hello {name}, have a nice bike trip!")
+    taxi_features = np.array(
+        [
+            weather_dict[month]["WND"],
+            weather_dict[month]["CIG"],
+            weather_dict[month]["VIS"],
+            weather_dict[month]["TMP"],
+            weather_dict[month]["DEW"],
+            weather_dict[month]["SLP"],
+            distance,
+            hour,
+            weekday,
+            month,
+            get_avg_speed(df_taxi, starting_zone, ending_zone, hour),
+        ]
+    )
+    bike_features = np.array(
+        [
+            weather_dict[month]["WND"],
+            weather_dict[month]["CIG"],
+            weather_dict[month]["VIS"],
+            weather_dict[month]["TMP"],
+            weather_dict[month]["DEW"],
+            weather_dict[month]["SLP"],
+            distance,
+            hour,
+            weekday,
+            month,
+            get_avg_speed(df_bikes, starting_zone, ending_zone, hour),
+        ]
+    )
+    time_taxi_prediction = rf_taxi.predict(taxi_features)
+    price_taxi_prediction = rf_taxi.predict(time_taxi_prediction[0])
+    time_bike_prediction = rf_taxi.predict(bike_features)
+
+    st.write(
+        f"  Hello {name}! \n Taking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction:.2f}$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
+    )
+
+starting_zone = 1
+ending_zone = 2
+hour = 4
+
 
 right_column.write(
     """
