@@ -5,7 +5,6 @@ import joblib
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import pydeck as pdk
 import streamlit as st
 
 st.set_page_config(
@@ -40,6 +39,24 @@ LAT = 40.760610
 LON = -73.95242
 
 
+def get_distance(df, starting_zone, ending_zone, hour):
+    avg_distance = df["distance"][
+        (df["start_station"] == starting_zone)
+        & (df["end_station"] == ending_zone)
+        & (df["Hour"] == hour)
+    ]
+    if len(avg_distance) == 0:
+        avg_distance = df["distance"][
+            (df["end_station"] == ending_zone) & (df["Hour"] == hour)
+        ]
+    if len(avg_distance) == 0:
+        avg_distance = df["distance"][(df["Hour"] == hour)]
+    if len(avg_distance) == 0:
+        avg_distance = df_taxi["distance"]
+    avg_distance = np.mean(avg_distance)
+    return avg_distance
+
+
 def get_avg_speed(df, starting_zone, ending_zone, hour):
     avg_speed = df["avg_speed"][
         (df["start_station"] == starting_zone)
@@ -55,7 +72,6 @@ def get_avg_speed(df, starting_zone, ending_zone, hour):
     if len(avg_speed) == 0:
         avg_speed = df_taxi["avg_speed"]
     avg_speed = np.mean(avg_speed)
-
     return avg_speed
 
 
@@ -65,10 +81,10 @@ def load_data(path):
 
 @st.cache()
 def load_datasets():
-    df_taxi = load_data("datasets/taxi_zone_speed_by_hour.csv").drop(
+    df_taxi = load_data("datasets/taxi_zone_speed_DISTANCE_by_hour.csv").drop(
         columns=["Unnamed: 0"]
     )
-    df_bikes = load_data("datasets/bike_zone_speed_by_hour.csv").drop(
+    df_bikes = load_data("datasets/bike_zone_speed_DISTANCE_by_hour.csv").drop(
         columns=["Unnamed: 0"]
     )
     return df_taxi, df_bikes
@@ -353,7 +369,6 @@ left_column_3, right_column = st.beta_columns((2, 3))
 with left_column_3:
     with st.form(key="my_form"):
         name = st.text_input(label="Enter your name")
-        method = st.selectbox("Are you using Bike or Taxi", ["taxi", "bike"])
         month = st.selectbox("Enter Month", MONTHS)
         hour = st.selectbox("Enter hour", list(range(0, 24)))
         weekday = st.selectbox("Enter day of the week", DAYS)
@@ -362,7 +377,6 @@ with left_column_3:
         submit_button = st.form_submit_button(label="Submit")
 
     # st.form_submit_button returns True upon form submit
-st.write("### Model Prediction")
 
 distance = PLACE_HOLDER_DISTANCE
 
@@ -404,21 +418,17 @@ if submit_button:
         np.array([distance, time_taxi_prediction[0]]).reshape(1, -1)
     )
     time_bike_prediction = rf_bike.predict(bike_features)
-
-    st.write(
-        f"  Hello {name}! \n Taking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction[0]:.2f}\$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
-    )
-
-# print(
-#     f"  Hello {name}! \nTaking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction[0]:.2f}$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
-# )
-
+    output_text = f"Hello {name}! \n Taking a taxi you would need {time_taxi_prediction[0]/60:.1f} minutes to reach your destination, and it will cost you around {price_taxi_prediction[0]:.2f}\$. \nTaking the bike costs 3$/h and it will take your {time_bike_prediction[0]/60:.1f} minutes!"
 
 right_column.write(
     """
-        ## What is our model?
-        What is it doing?\n
-        What it returns? 
-        """
+            ## What is our model?
+            What is it doing?\n
+            What it returns? 
+            """
 )
+
+right_column.write("### Model Prediction")
+right_column.write(output_text)
+
 st.write("## Route Network Analysis for Bikes")
