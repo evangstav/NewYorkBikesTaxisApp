@@ -24,6 +24,10 @@ months = [
 
 days = ["Monday", "Tuesday", "Wednesday", "Thursay", "Friday", "Saturday", "Sunday"]
 
+st.set_page_config(
+    page_title="BikesVsTaxisNYC",
+    layout="wide",
+)
 
 st.title("Bike vs Taxis")
 
