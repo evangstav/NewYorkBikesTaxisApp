@@ -389,11 +389,11 @@ left_column_1.write("           Taxi Rides")
 middle_column_1.write("          Customer Rides")
 right_column_1.write("         Subscriber Rides")
 
-if add_selectbox == "Month":
+if add_selectbox == "Monthly":
     left_column_1.plotly_chart(taxi_month, width=300)
     middle_column_1.plotly_chart(customer_month, width=300)
     right_column_1.plotly_chart(subscriber_month, width=300)
-elif add_selectbox == "Hours":
+elif add_selectbox == "Hourly":
     left_column_1.plotly_chart(taxi_hourly_counts, width=300)
     middle_column_1.plotly_chart(customer_hourly_counts, width=300)
     right_column_1.plotly_chart(subscriber_hourly_counts, width=300)
